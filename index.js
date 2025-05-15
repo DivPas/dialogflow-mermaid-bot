@@ -1,66 +1,41 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { Configuration, OpenAIApi } = require('openai');
+const axios = require('axios');
+require('dotenv').config();
 
 const app = express();
+const port = process.env.PORT || 8080;
+
 app.use(bodyParser.json());
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const SECRET_TOKEN = process.env.SECRET_TOKEN;
 
-const configuration = new Configuration({
-  apiKey: OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
-
 app.post('/', async (req, res) => {
-  // Check for secret token in header
-  if (req.headers['x-webhook-token'] !== SECRET_TOKEN) {
-    return res.status(403).send('Forbidden: Invalid token');
-  }
-
   try {
-    const prompt = req.body.prompt;
+    const prompt = req.body.sessionInfo?.parameters?.prompt;
+
     if (!prompt) {
-      return res.status(400).send({ error: 'Missing prompt' });
+      return res.status(400).json({ error: 'Prompt is missing from sessionInfo.parameters' });
     }
 
-    // Call OpenAI to generate Mermaid code
-    const completion = await openai.createChatCompletion({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a helpful assistant that converts user prompts into Mermaid.js flowchart code.',
-        },
-        { role: 'user', content: prompt },
-      ],
-    });
+    if (!SECRET_TOKEN) {
+      return res.status(403).send('Forbidden: Secret token not configured');
+    }
 
-    const mermaidCode = completion.data.choices[0].message.content.trim();
-
-    // Encode Mermaid code for mermaid.ink URL
-    const encoded = encodeURIComponent(mermaidCode);
-    const mermaidUrl = `https://mermaid.ink/img/${encoded}`;
-
-    // Return Mermaid code and image URL
-    res.json({
-      mermaid: mermaidCode,
-      imageUrl: mermaidUrl,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
-// Health check endpoint
-app.get('/', (req, res) => {
-  res.send('Mermaid webhook running');
-});
-
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
-});
+    // Generate Mermaid code using OpenAI
+    const openaiResponse = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant that converts user prompts into valid Mermaid.js diagram code (flowchart format only). Only return the Mermaid code, nothing else.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature:
