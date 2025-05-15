@@ -8,24 +8,25 @@ const port = process.env.PORT || 8080;
 
 app.use(bodyParser.json());
 
+// Load keys from environment variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const SECRET_TOKEN = process.env.SECRET_TOKEN;
 
 app.post('/', async (req, res) => {
   try {
-    // Check your custom secret token in header 'x-secret-token'
+    // Verify the secret token from the custom header 'x-secret-token'
     const clientSecret = req.header('x-secret-token');
     if (!clientSecret || clientSecret !== SECRET_TOKEN) {
       return res.status(403).send('Forbidden: Invalid secret token');
     }
 
-    // Extract prompt from Dialogflow format
+    // Extract prompt from Dialogflow-style payload
     const prompt = req.body.sessionInfo?.parameters?.prompt;
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is missing from sessionInfo.parameters' });
     }
 
-    // Call OpenAI API to generate Mermaid code
+    // Call OpenAI API to generate Mermaid.js code
     const openaiResponse = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
@@ -52,6 +53,7 @@ app.post('/', async (req, res) => {
 
     const mermaidCode = openaiResponse.data.choices[0].message.content;
 
+    // Return the Mermaid code as JSON
     res.json({ mermaidCode });
 
   } catch (error) {
