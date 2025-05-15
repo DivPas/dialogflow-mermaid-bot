@@ -16,7 +16,7 @@ app.post('/', async (req, res) => {
   try {
     // Verify the secret token from the custom header 'x-secret-token'
     const clientSecret = req.header('x-secret-token');
-    if (!clientSecret || clientSecret !== mySuperSecret123) {
+    if (!clientSecret || clientSecret !== SECRET_TOKEN) {
       return res.status(403).send('Forbidden: Invalid secret token');
     }
 
