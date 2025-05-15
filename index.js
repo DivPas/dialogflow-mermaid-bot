@@ -1,74 +1,66 @@
-import express from "express";
-import bodyParser from "body-parser";
-import zlib from "zlib";
-import { OpenAI } from "openai";
+const express = require('express');
+const bodyParser = require('body-parser');
+const { Configuration, OpenAIApi } = require('openai');
 
 const app = express();
 app.use(bodyParser.json());
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const SECRET_TOKEN = process.env.SECRET_TOKEN;
 
-function encodeMermaidToURL(text) {
-  const compressed = zlib.deflateSync(text, { level: 9 });
-  return compressed.toString("base64url");
-}
+const configuration = new Configuration({
+  apiKey: OPENAI_API_KEY,
+});
+const openai = new OpenAIApi(configuration);
 
-app.post("/", async (req, res) => {
-  const prompt = req.body.sessionInfo?.parameters?.prompt || "Create a basic flowchart";
+app.post('/', async (req, res) => {
+  // Check for secret token in header
+  if (req.headers['x-webhook-token'] !== SECRET_TOKEN) {
+    return res.status(403).send('Forbidden: Invalid token');
+  }
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+    const prompt = req.body.prompt;
+    if (!prompt) {
+      return res.status(400).send({ error: 'Missing prompt' });
+    }
+
+    // Call OpenAI to generate Mermaid code
+    const completion = await openai.createChatCompletion({
+      model: 'gpt-4o-mini',
       messages: [
         {
-          role: "system",
-          content: "Only output valid Mermaid.js flowchart code. No explanation or intro text.",
+          role: 'system',
+          content:
+            'You are a helpful assistant that converts user prompts into Mermaid.js flowchart code.',
         },
-        { role: "user", content: prompt },
+        { role: 'user', content: prompt },
       ],
     });
 
-    const mermaidCode = completion.choices[0].message.content.trim();
-    const encoded = encodeMermaidToURL(mermaidCode);
-    const imageUrl = `https://mermaid.ink/img/${encoded}`;
+    const mermaidCode = completion.data.choices[0].message.content.trim();
 
+    // Encode Mermaid code for mermaid.ink URL
+    const encoded = encodeURIComponent(mermaidCode);
+    const mermaidUrl = `https://mermaid.ink/img/${encoded}`;
+
+    // Return Mermaid code and image URL
     res.json({
-      fulfillment_response: {
-        messages: [
-          {
-            text: { text: ["Here is your diagram!"] },
-          },
-          {
-            payload: {
-              richContent: [
-                [
-                  {
-                    type: "image",
-                    rawUrl: imageUrl,
-                    accessibilityText: "Mermaid Diagram"
-                  }
-                ]
-              ]
-            }
-          }
-        ],
-      },
+      mermaid: mermaidCode,
+      imageUrl: mermaidUrl,
     });
-  } catch (err) {
-    console.error("Error generating diagram:", err);
-    res.json({
-      fulfillment_response: {
-        messages: [
-          {
-            text: {
-              text: ["Something went wrong!"],
-            },
-          },
-        ],
-      },
-    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Internal Server Error');
   }
 });
 
-const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`Server running on port ${port}`));
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.send('Mermaid webhook running');
+});
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`Server started on port ${PORT}`);
+});
