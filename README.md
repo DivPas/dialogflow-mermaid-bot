@@ -12,22 +12,10 @@ This webhook accepts a prompt from Dialogflow CX, uses OpenAI to generate Mermai
 ## 🚀 Deploy on Cloud Run
 
 ```bash
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/mermaid-webhook
-gcloud run deploy mermaid-webhook \
-  --image gcr.io/YOUR_PROJECT_ID/mermaid-webhook \
+gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/mermaid-bot
+gcloud run deploy mermaid-bot \
+  --image gcr.io/YOUR_PROJECT_ID/mermaid-bot \
   --platform managed \
   --region us-central1 \
-  --allow-unauthenticated
-```
-
-Add environment variable:
-- `OPENAI_API_KEY`
-
-## 🤖 Use in Dialogflow CX
-
-1. Create intent with `@sys.any` parameter called `prompt`.
-2. In fulfillment, call this webhook.
-3. It will return a Mermaid diagram image.
-
-Test prompt:  
-**"Create a signup and verification flow"**
+  --no-allow-unauthenticated \
+  --set-env-vars OPENAI_API_KEY=your_openai_api_key
